@@ -8,6 +8,8 @@ extern "C" {  // only need to export C interface if used by C++ source code
 
 #ifdef __linux__ 
 
+  void sfd2(double* H, double* dH, double r);
+
   void sfd6(double* H, double* dH, double r, double s);
 
   void getAABB(double* AABBmin, double* AABBmax, int nsd, int nnod, double* X, double longestEdge, int* IEN, int* ISN, int* elementID, int* segmentID, int n, int nsn, int nes, int nen, int neq);
@@ -19,7 +21,8 @@ extern "C" {  // only need to export C interface if used by C++ source code
   void evaluateContactConstraints(double* GPs, int* ISN, int* IEN, int* N, double* AABBmin, double* AABBmax, int* head, int* next, double* X, int* elementID, int* segmentID, int n, int nsn, int nsd, int npd, int ngp, int nen, int nes, int neq, double longestEdge);
 #elif _WIN32
   // windows code goes here
-
+ 
+  void __declspec(dllexport) sfd2(double* H, double* dH, double r);
   void __declspec(dllexport) sfd6(double* H, double* dH, double r, double s);
   void __declspec(dllexport) getAABB(double* AABBmin, double* AABBmax, int nsd, int nnod, double* X, double longestEdge, int* IEN, int* ISN, int* elementID, int* segmentID, int n, int nsn, int nes, int nen, int neq);
 
