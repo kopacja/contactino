@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.0.3] - 2017-01-22
+
+### Added
+
+- Key keyAssembleKc indicating the requirement to assemble Kc
+- sfd8() i.e. eigth-node quad contact element in 3D
+
+### Fixed
+
+- Update the master element and segment number for each slave integration point
+
+### Changed
+
+- activeGPs changed from double to bool
+- (GAPs[g] > 1e-4) changed to (GAPs[g] > 0.0)
+- Only values greater than 1e-50 in absolute value are assembled
+- If the contact segment of an element is a quadrilateral, it is divided into 4 triangles
+- max_niter changed from 100 to 1000 in the local contact searching
+- Store master element end segment index and r,s coords only if d < 0
+
 ## [0.0.2] - 2016-12-02
 
 ### Added
@@ -13,7 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 2D two-node linear segments
 - Distinguishing the normal vector in the initial (for integration) and current (for kinematics) configuration
 - Introduction of a Boolean value to indicate an active/inactive integration point
-- 
 
 ### Fixed
 
@@ -32,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only sfd6() i.e. quadratic triangle contact element in 3D
 - All arrays are 1D
 
-[unreleased]: https://github.com/kopacja/contactino/compare/v0.0.2...HEAD
+[unreleased]: https://github.com/kopacja/contactino/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/kopacja/contactino/releases/tag/v0.0.3
 [0.0.2]: https://github.com/kopacja/contactino/releases/tag/v0.0.2
 [0.0.1]: https://github.com/kopacja/contactino/releases/tag/v0.0.1
