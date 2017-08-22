@@ -1,4 +1,6 @@
-// contactino.cpp
+/**
+	\file contactino.cpp
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -7,6 +9,15 @@
 
 #include "contactino.h"
 
+/*! Evaluate shape functions and their 1st partial derivatives of 8-node (serendipity) quadrilateral element
+
+  \param r - 1st isoparametric (parent, reference) coordinate
+  \param s - 2nd isoparametric coordinate
+
+  \return H 1d array (8x1) of shape functions values
+  \return dH 2d array (8x2) of 1st partial derivatives of shape functions with respect to r (1st column) and s (2nd column)
+
+*/
 void sfd8(double *H, double *dH, double r, double s)
 {
 	const double h5 = 0.5 * (1 - r * r) * (1 - s);
@@ -68,6 +79,15 @@ void sfd8(double *H, double *dH, double r, double s)
 	dH[15] = h8s;
 }
 
+/*! Evaluate shape functions and their 1st partial derivatives of 6-node (serendipity) triangular element
+
+  \param r - 1st isoparametric coordinate
+  \param s - 2nd isoparametric coordinate
+
+  \return H 1d array (6x1) of shape functions values
+  \return dH 2d array (6x2) of 1st partial derivatives of shape functions with respect to r (1st column) and s (2nd column)
+
+*/
 void sfd6(double *H, double *dH, double r, double s)
 {
 	const double h4 = 4 * r * (1 - r - s);
@@ -116,6 +136,14 @@ void sfd6(double *H, double *dH, double r, double s)
 	dH[11] = h6s;
 }
 
+/*! Evaluate shape functions and their 1st derivatives of 2-node bar element
+
+  \param r - 1st isoparametric coordinate
+
+  \return H 1d array (2x1) of shape functions values
+  \return dH 1d array (2x1) of 1st derivatives of shape functions with respect to r
+
+*/
 void sfd2(double *H, double *dH, double r)
 {
 	const double h1 = 0.5 * (1 - r);
@@ -131,7 +159,36 @@ void sfd2(double *H, double *dH, double r)
 	dH[1] = h2r;
 }
 
-void assembleContactResidualAndStiffness(double *Gc, double *vals, double *rows, double *cols, int *len, double *GPs, int *ISN, int *IEN, double *X, double *U, double *H, double *dH, double *gw, double *activeGPsOld, int neq, int nsd, int npd, int ngp, int nes, int nsn, int nen, int GPs_len, double epss, bool keyContactDetection, bool keyAssembleKc)
+/*! Calculate contact residual term (gradient) and contact tangent term (Hessian)
+
+  \param len - maximal length of 1d arrays rows,cols, and vals
+  \param GPs - 2d array (GPs_len x ??? cols)
+  \param ISN - 2d array (nsn*)
+  \param IEN -
+  \param X -
+  \param U -
+  \param H -
+  \param dH -
+  \param gw -
+  \param activeGPsOld -
+  \param neq - Number of Equations
+  \param nsd - Number of Space Dimensions (usually 2 or 3)
+  \param npd - Number of Parametric Dimensions (usually 1 or 2) (parametric=reference=parent coordinates)
+  \param ngp - Number of GaussPoints on contact segment (segment means face of element)
+  \param nes - Number of Element Segments
+  \param nsn - Number of Segment Nodes
+  \param GPs_len - length of GPs array
+  \param epss - penalty parameter (usualy 100*Young's mudulus)
+  \param keyContactDetection - if is true, ...
+  \param keyAssembleKc - if is true, contact tangent term is assembled only
+
+  \return Gc - 1d array
+  \return rows - 1d array
+  \return cols - 1d array
+  \return valc - 1d array
+
+*/
+void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc, double *vals, double *rows, double *cols, int *len, double *GPs, int *ISN, int *IEN, double *X, double *U, double *H, double *dH, double *gw, double *activeGPsOld, int neq, int nsd, int npd, int ngp, int nes, int nsn, int nen, int GPs_len, double epss, bool keyContactDetection, bool keyAssembleKc)
 {
 	int col;
 	int *segmentNodesIDs = new int[nsn];
@@ -154,6 +211,8 @@ void assembleContactResidualAndStiffness(double *Gc, double *vals, double *rows,
 
 	double Xp[3];
 	double Xg[3];
+
+	int n_seg = GPs_len / ngp;
 
 	// Fill Gc_s array by zeros:
 	for (int i = 0; i < neq; ++i)
@@ -355,6 +414,8 @@ void assembleContactResidualAndStiffness(double *Gc, double *vals, double *rows,
 				GPs[(2 * nsd + 3) * GPs_len + i + g] = 1;
 			}
 
+			printf("n_seg = %i, seg = %i\n", n_seg, i);
+
 			// evaluate shape functions and contact residual vectors:
 			for (int j = 0; j < nsn; ++j)
 			{
@@ -367,6 +428,7 @@ void assembleContactResidualAndStiffness(double *Gc, double *vals, double *rows,
 					C_s[j * nsd + sdf] += hs * normal[sdf];
 					C_m[j * nsd + sdf] -= hm * normal[sdf];
 					Gc[segmentNodesIDs[j] * nsd + sdf] -= epss * GAPs[g] * hs * normal[sdf] * gw[g] * jacobian;
+					Gc_loc[(i + g) * (j * nsd + sdf) + i / ngp] -= epss * GAPs[g] * hs * normal[sdf] * gw[g] * jacobian;
 				}
 			}
 
@@ -377,6 +439,16 @@ void assembleContactResidualAndStiffness(double *Gc, double *vals, double *rows,
 				{ // loop over cols
 					for (int k = 0; k < nsn * nsd; ++k)
 					{ // loop over rows
+
+						// Kc elementu je blokova matice o strukture:
+						// Kc_e = [C_m*C_m'  C_m*C_s'
+						//         C_s*C_m'  C_s*C_s'];
+						// dimeze: [(nsn*nsd)*(nsn*nsd)  (nsn*nsd)*(nsn*nsd)
+						//          (nsn*nsd)*(nsn*nsd)  (nsn*nsd)*(nsn*nsd)];
+						Kc[(i + g) * 2 * nsn * nsd * k + (i + g) * j + i / ngp] = 0.5 * C_m[j] * C_m[k] * gw[g] * jacobian;
+						Kc[(i + g) * 2 * nsn * nsd * k + (i + g) * (nsn * nsd + j) + i / ngp] = 0.5 * C_s[j] * C_m[k] * gw[g] * jacobian;
+						Kc[(i + g) * 2 * nsn * nsd * (nsn * nsd + k) + (i + g) * j + i / ngp] = 0.5 * C_m[j] * C_s[k] * gw[g] * jacobian;
+						Kc[(i + g) * 2 * nsn * nsd * (nsn * nsd + k) + (i + g) * (nsn * nsd + j) + i / ngp] = 0.5 * C_s[j] * C_s[k] * gw[g] * jacobian;
 
 						const int jdof = j % nsd;
 						const int jnode = (j - jdof) / nsd; // row node
@@ -502,26 +574,16 @@ void getLongestEdgeAndGPs(double *longestEdge, double *GPs, int n, int nsd, int 
 			g++;
 		}
 
-		// element edge length / diagonal:
-		if (nsd == 2)
+		for (int i = 0; i < nsn; ++i)
 		{
-			const double lengthOfEdge = sqrt(pow(Xs[0] - Xs[1], 2) + pow(Xs[2] - Xs[3], 2));
-			*longestEdge = std::max(*longestEdge, lengthOfEdge);
-		}
-		else if (nsd == 3)
-		{
-			if (nsn == 6)
+			for (int j = i + 1; j < nsn; ++j)
 			{
-				const double lengthOfEdge1 = sqrt(pow(Xs[0] - Xs[1], 2) + pow(Xs[3] - Xs[4], 2) + pow(Xs[6] - Xs[7], 2));
-				const double lengthOfEdge2 = sqrt(pow(Xs[2] - Xs[1], 2) + pow(Xs[5] - Xs[4], 2) + pow(Xs[8] - Xs[7], 2));
-				const double lengthOfEdge3 = sqrt(pow(Xs[0] - Xs[2], 2) + pow(Xs[3] - Xs[5], 2) + pow(Xs[6] - Xs[8], 2));
-				*longestEdge = std::max(std::max(std::max(lengthOfEdge1, lengthOfEdge2), lengthOfEdge3), *longestEdge);
-			}
-			if (nsn == 8)
-			{
-				const double diagonal1 = sqrt(pow(Xs[2] - Xs[0], 2) + pow(Xs[10] - Xs[8], 2) + pow(Xs[18] - Xs[16], 2));
-				const double diagonal2 = sqrt(pow(Xs[3] - Xs[1], 2) + pow(Xs[11] - Xs[9], 2) + pow(Xs[19] - Xs[17], 2));
-				*longestEdge = std::max(std::max(diagonal1, diagonal2), *longestEdge);
+				double lengthOfEdge = 0.0;
+				for (int sdf = 0; sdf < nsd; ++sdf)
+				{
+					lengthOfEdge += pow(Xs[sdf * nsn + i] - Xs[sdf * nsn + j], 2);
+				}
+				*longestEdge = std::max(*longestEdge, sqrt(lengthOfEdge));
 			}
 		}
 
@@ -552,23 +614,20 @@ void getAABB(double *AABBmin, double *AABBmax, int nsd, int nnod, double *X, dou
 			{
 				const int IENrow = ISN[nes * i + sg] - 1;		// Matlab numbering starts with 1
 				segmentNodesID[i] = IEN[nen * el + IENrow] - 1; // Matlab numbering starts with 1
-				for (int sdf = 0; sdf < nsd; ++sdf)
-				{
-					const double x = X[sdf * (int)(neq / nsd) + segmentNodesID[i]];
-					AABBmin[sdf] = std::min(AABBmin[sdf], x);
-					AABBmax[sdf] = std::max(AABBmax[sdf], x);
-				}
+				//	for (int sdf = 0; sdf < nsd; ++sdf) {
+				const double x = X[sdf * (int)(neq / nsd) + segmentNodesID[i]];
+				AABBmin[sdf] = std::min(AABBmin[sdf], x);
+				AABBmax[sdf] = std::max(AABBmax[sdf], x);
+				//	}
 			}
 		}
 
-		for (int sdf = 0; sdf < nsd; ++sdf)
-		{
-			if ((AABBmax[sdf] - AABBmin[sdf]) < longestEdge)
-			{
-				AABBmax[sdf] += 0.5 * longestEdge;
-				AABBmin[sdf] -= 0.5 * longestEdge;
-			}
-		}
+		// for (int sdf = 0; sdf < nsd; ++sdf) {
+		// if ((AABBmax[sdf] - AABBmin[sdf]) < longestEdge) {
+		//   AABBmax[sdf] += 0.5*longestEdge;
+		//   AABBmin[sdf] -= 0.5*longestEdge;
+		// }
+		// }
 	}
 	delete[] segmentNodesID;
 }
@@ -943,12 +1002,14 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 											sfd8(Hm, dHm, r, s);
 										}
 
-										double b1, b2, A11, A22, A12;
+										double b1, b2, A11, A22, A12, d_tmp;
 										A11 = 0.0;
 										A22 = 0.0;
 										A12 = 0.0;
 										b1 = 0.0;
 										b2 = 0.0;
+										d_tmp = 0.0;
+
 										for (int sdf = 0; sdf < nsd; ++sdf)
 										{
 											double x = 0.0;
@@ -974,7 +1035,10 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 												A22 += dx_ds * dx_ds;
 												A12 += dx_dr * dx_ds;
 											}
+											d_tmp += (Xg[sdf] - x) * (Xg[sdf] - x);
 										}
+
+										d = (d < 0) ? -sqrt(d_tmp) : sqrt(d_tmp);
 
 										double recDetA;
 										double invA11;
@@ -989,6 +1053,7 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 											dr = invA11 * b1;
 											r += dr;
 											dr_norm = dr;
+											printf("r = %f, dr_norm = %f\n", r, dr_norm);
 										}
 
 										if (npd == 2)

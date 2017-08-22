@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.4] - 2017-08-22
+
+### Added
+
+- Doxygen comments
+- Export of Gc_cols and Kc
+
+### Fixed
+
+- Removed inner loop through spatial coordinates in AABB calculation
+- Removed "inflating" AABB by half the longestEdge
+
+### Changed
+
+- longestEdge calculated as the longest distance between all nodes of the segment
+- The distance calculated as a projection onto the triangle is refined in the local search
 
 ## [0.0.3] - 2017-01-22
 
@@ -51,7 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only sfd6() i.e. quadratic triangle contact element in 3D
 - All arrays are 1D
 
-[unreleased]: https://github.com/kopacja/contactino/compare/v0.0.3...HEAD
+[unreleased]: https://github.com/kopacja/contactino/compare/v0.0.4...HEAD
+[0.0.4]: https://github.com/kopacja/contactino/releases/tag/v0.0.4
 [0.0.3]: https://github.com/kopacja/contactino/releases/tag/v0.0.3
 [0.0.2]: https://github.com/kopacja/contactino/releases/tag/v0.0.2
 [0.0.1]: https://github.com/kopacja/contactino/releases/tag/v0.0.1
