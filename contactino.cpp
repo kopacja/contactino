@@ -3,11 +3,55 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
+#define _USE_MATH_DEFINES
 #include <math.h>
+
 #include <cfloat>
 #include <algorithm>
 
 #include "contactino.h"
+
+/*! Evaluate shape functions and their 1st partial derivatives of 4-node bilinear element
+
+  \param r - 1st isoparametric (parent, reference) coordinate
+  \param s - 2nd isoparametric coordinate
+
+  \return H 1d array (4x1) of shape functions values
+  \return dH 2d array (4x2) of 1st partial derivatives of shape functions with respect to r (1st column) and s (2nd column)
+
+*/
+void sfd4(double *H, double *dH, double r, double s)
+{
+	const double h1 = 0.25 * (1 - r) * (1 - s);
+	const double h2 = 0.25 * (1 + r) * (1 - s);
+	const double h3 = 0.25 * (1 + r) * (1 + s);
+	const double h4 = 0.25 * (1 - r) * (1 + s);
+	/***********************************************/
+	const double h1r = -0.25 * (1 - s);
+	const double h2r = 0.25 * (1 - s);
+	const double h3r = 0.25 * (s + 1);
+	const double h4r = -0.25 * (1 + s);
+	/***********************************************/
+	const double h1s = 0.25 * (r - 1);
+	const double h2s = -0.25 * (1 + r);
+	const double h3s = 0.25 * (r + 1);
+	const double h4s = 0.25 * (1 - r);
+	/***********************************************/
+	H[0] = h1;
+	H[1] = h2;
+	H[2] = h3;
+	H[3] = h4;
+
+	dH[0] = h1r;
+	dH[1] = h2r;
+	dH[2] = h3r;
+	dH[3] = h4r;
+
+	dH[4] = h1s;
+	dH[5] = h2s;
+	dH[6] = h3s;
+	dH[7] = h4s;
+}
 
 /*! Evaluate shape functions and their 1st partial derivatives of 8-node (serendipity) quadrilateral element
 
@@ -188,7 +232,7 @@ void sfd2(double *H, double *dH, double r)
   \return valc - 1d array
 
 */
-void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc, double *vals, double *rows, double *cols, int *len, double *GPs, int *ISN, int *IEN, double *X, double *U, double *H, double *dH, double *gw, double *activeGPsOld, int neq, int nsd, int npd, int ngp, int nes, int nsn, int nen, int GPs_len, double epss, bool keyContactDetection, bool keyAssembleKc)
+void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc, double *vals, double *rows, double *cols, int *len, double *GPs, int *ISN, int *IEN, double *X, double *U, double *H, double *dH, double *gw, double *activeGPsOld, int neq, int nsd, int npd, int ngp, int nes, int nsn, int nen, int GPs_len, double epsN, double epsT, double mu, bool keyContactDetection, bool keyAssembleKc, bool isAxisymmetric)
 {
 	int col;
 	int *segmentNodesIDs = new int[nsn];
@@ -199,20 +243,37 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 	double *Um = new double[nsn * nsd];
 	double *dXs = new double[nsn * npd];
 	double *dxs = new double[nsn * npd];
+	double *dXm = new double[nsn * npd];
+	double *dxm = new double[nsn * npd];
 	double *GAPs = new double[ngp];
 	bool *activeGPs = new bool[ngp];
-	double *C_s = new double[nsn * nsd];
-	double *C_m = new double[nsn * nsd];
+	double *Ns = new double[nsn * nsd];
+	double *Nm1 = new double[nsn * nsd];
+	double *Nm2 = new double[nsn * nsd];
+	double *C_Ns = new double[nsn * nsd];
+	double *C_Nm = new double[nsn * nsd];
+	double *C_Ts1 = new double[nsn * nsd];
+	double *C_Tm1 = new double[nsn * nsd];
+	double *C_Nm1 = new double[nsn * nsd];
+	double *C_Pm1 = new double[nsn * nsd];
+	double *C_Ts2 = new double[nsn * nsd];
+	double *C_Tm2 = new double[nsn * nsd];
+	double *C_Nm2 = new double[nsn * nsd];
+	double *C_Pm2 = new double[nsn * nsd];
 	double *Hm = new double[nsn];
 	double *dHm = new double[nsn * npd];
+	double *Xi_m = new double[npd];
+	double *Xi0_m = new double[npd];
+	double *t_T = new double[npd];
+	double *t_T0 = new double[npd];
 
 	int len_guess = *len;
 	*len = 0;
 
+	// int n_seg = GPs_len / ngp;
+
 	double Xp[3];
 	double Xg[3];
-
-	int n_seg = GPs_len / ngp;
 
 	// Fill Gc_s array by zeros:
 	for (int i = 0; i < neq; ++i)
@@ -226,8 +287,25 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 		// Fill C_s and C_m arrays by zeros:
 		for (int j = 0; j < nsn * nsd; ++j)
 		{
-			C_s[j] = 0.0;
-			C_m[j] = 0.0;
+			Ns[j] = 0.0;
+
+			C_Ns[j] = 0.0;
+			C_Nm[j] = 0.0;
+
+			Nm1[j] = 0.0;
+			C_Ts1[j] = 0.0;
+			C_Tm1[j] = 0.0;
+			C_Nm1[j] = 0.0;
+			C_Pm1[j] = 0.0;
+
+			if (npd == 2)
+			{
+				Nm2[j] = 0.0;
+				C_Ts2[j] = 0.0;
+				C_Tm2[j] = 0.0;
+				C_Nm2[j] = 0.0;
+				C_Pm2[j] = 0.0;
+			}
 		}
 
 		// slave element index:
@@ -265,10 +343,10 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 			}
 
 			// master element index:
-			col = (2 * nsd + 4) * GPs_len;
+			col = (nsd + npd + 4) * GPs_len;
 			const int elm = (int)GPs[col + i + g] - 1; // Matlab numbering starts with 1
 			// master segment index:
-			col = (2 * nsd + 5) * GPs_len;
+			col = (nsd + npd + 5) * GPs_len;
 			const int sgm = (int)GPs[col + i + g] - 1; // Matlab numbering starts with 1
 
 			// master segment coords Xm and displacements Um:
@@ -286,8 +364,11 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 				}
 			}
 
-			// Shape function and its derivatives of gausspoint's master segment
+			// GPs legend:              Xg     els  sgs   gap    Xi_m  isActive      elm      sgm      isStick      t_T       Xi0_m
+			// double* GPs = new double[n*(nsd + 1 +  1  +  1  +  npd  +   1     +     1    +   1     +    1    +    npd   +    npd    ];
+			// index of begining           0    nsd nsd+1 nsd+2  nsd+3  nsd+npd+3  nsd+npd+4 nsd+npd+5 nsd+npd+6  nsd+npd+7 nsd+2*npd+7  (size = nsd+3*npd+7)
 
+			// Shape function and its derivatives of gausspoint's master segment
 			double r = GPs[(nsd + 3) * GPs_len + i + g];
 			double s = 0.0;
 
@@ -300,6 +381,9 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 			{
 			case 2:
 				sfd2(Hm, dHm, r);
+				break;
+			case 4:
+				sfd4(Hm, dHm, r, s);
 				break;
 			case 6:
 				sfd6(Hm, dHm, r, s);
@@ -320,13 +404,14 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 				}
 			}
 
+			// if contact detection is on, the new gap is stored in the GP array
 			if (keyContactDetection)
 			{
 				col = (nsd + 2) * GPs_len;
 				GAPs[g] = GPs[col + i + g];
 			}
 			else
-			{
+			{ // else the new gap is considered as the distance between the Gauss point and its projection onto the master segment:
 				GAPs[g] = sqrt((Xp[0] - Xg[0]) * (Xp[0] - Xg[0]) + (Xp[1] - Xg[1]) * (Xp[1] - Xg[1]) + (Xp[2] - Xg[2]) * (Xp[2] - Xg[2]));
 			}
 
@@ -335,6 +420,8 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 			{
 				dXs[j] = 0.0;
 				dxs[j] = 0.0;
+				dXm[j] = 0.0;
+				dxm[j] = 0.0;
 			}
 
 			// Evaluate tangent vectors:
@@ -348,47 +435,146 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 						const double dh = dH[col + g * npd + pdf];
 						dXs[npd * sdf + pdf] += dh * Xs[sdf * nsn + j];
 						dxs[npd * sdf + pdf] += dh * (Xs[sdf * nsn + j] + Us[sdf * nsn + j]);
+						dXm[npd * sdf + pdf] += dHm[j] * Xm[sdf * nsn + j];
+						dxm[npd * sdf + pdf] += dHm[j] * (Xm[sdf * nsn + j] + Um[sdf * nsn + j]);
 					}
 				}
 			}
 
+			//       X     Y      Z
+			// r   dxs[0] dxs[2]  dxs[4]
+			// s   dxs[1] dxs[3]  dxs[5]
+
+			// Matric tensor:
+			double mm[4];
+
+			mm[0] = 0.0;
+			mm[1] = 0.0;
+			mm[2] = 0.0;
+			mm[3] = 0.0;
+
+			for (int sdf = 0; sdf < nsd; ++sdf)
+			{
+				mm[0] += dxm[sdf * npd + 0] * dxm[sdf * npd + 0];
+				if (npd == 2)
+				{
+					mm[1] += dxm[sdf * npd + 1] * dxm[sdf * npd + 0];
+					mm[2] += dxm[sdf * npd + 0] * dxm[sdf * npd + 1];
+					mm[3] += dxm[sdf * npd + 1] * dxm[sdf * npd + 1];
+				}
+			}
+
+			// Inverse of matric tensor
+
+			double invmm[4];
+			invmm[0] = 0.0;
+			invmm[1] = 0.0;
+			invmm[2] = 0.0;
+			invmm[3] = 0.0;
+
+			if (npd == 1)
+			{
+				invmm[0] = 1 / mm[0];
+			}
+			else if (npd == 2)
+			{
+				const double invdetmm = 1 / (mm[0] * mm[3] - mm[1] * mm[2]);
+				invmm[0] = invdetmm * mm[3];
+				invmm[1] = -invdetmm * mm[2];
+				invmm[2] = -invdetmm * mm[1];
+				invmm[3] = invdetmm * mm[0];
+			}
+
+			// Read frictional variables:
+			for (int pdf = 0; pdf < npd; ++pdf)
+			{
+				Xi_m[pdf] = GPs[(nsd + 3 + pdf) * GPs_len + i + g];
+				t_T0[pdf] = GPs[(nsd + npd + 7 + pdf) * GPs_len + i + g];
+				Xi0_m[pdf] = GPs[(nsd + 2 * npd + 7 + pdf) * GPs_len + i + g];
+			}
+			// Is stick is not necessary
+			// const int isStick = (int)GPs[(nsd + npd + 6)*GPs_len + i + g];
+
+			// Evaluate trial tangent traction:
+			for (int r = 0; r < npd; ++r)
+			{
+				t_T[r] = t_T0[r];
+				for (int s = 0; s < npd; ++s)
+				{
+					t_T[r] -= epsT * (Xi_m[s] - Xi0_m[s]);
+				}
+			}
+
+			// Evaluate norm of the trial traction vector:
+			double norm_t_T = 0.0;
+			for (int r = 0; r < npd; ++r)
+			{
+				for (int s = 0; s < npd; ++s)
+				{
+					norm_t_T += t_T[r] * mm[npd * s + r] * t_T[s];
+				}
+			}
+			norm_t_T = sqrt(norm_t_T);
+
+			// Unit vector in the direction od slip:
+			double p_T[2];
+			p_T[1] = 0.0;
+			for (int r = 0; r < npd; ++r)
+			{
+				if (abs(norm_t_T) > 1e-10)
+				{
+					p_T[r] = t_T[r] / norm_t_T;
+				}
+				else
+				{
+					p_T[r] = 0.0;
+				}
+			}
+
 			// Evaluate normal vector:
-			double Normal[3];
-			double normal[3];
+			double Normal[3]; // normal to initial surface
+			double normal[3]; // normal to the current surface
+
 			if (nsd == 2)
 			{
-				Normal[0] = dXs[1];
-				Normal[1] = -dXs[0];
+				Normal[0] = dXm[1];
+				Normal[1] = -dXm[0];
 				Normal[2] = 0.0;
 
-				normal[0] = dxs[1];
-				normal[1] = -dxs[0];
+				normal[0] = dxm[1];
+				normal[1] = -dxm[0];
 				normal[2] = 0.0;
 			}
 			else if (nsd == 3)
 			{
-				const double dXs_dr1 = dXs[0];
-				const double dXs_dr2 = dXs[npd + 0];
-				const double dXs_dr3 = dXs[2 * npd + 0];
-				const double dXs_ds1 = dXs[1];
-				const double dXs_ds2 = dXs[npd + 1];
-				const double dXs_ds3 = dXs[2 * npd + 1];
-				Normal[0] = dXs_dr2 * dXs_ds3 - dXs_dr3 * dXs_ds2;
-				Normal[1] = dXs_dr3 * dXs_ds1 - dXs_dr1 * dXs_ds3;
-				Normal[2] = dXs_dr1 * dXs_ds2 - dXs_dr2 * dXs_ds1;
+				//       X     Y      Z
+				// r   dXs[0] dXs[2]  dXs[4]
+				// s   dXs[1] dXs[3]  dXs[5]
+				const double dXm_dr1 = dXm[0];
+				const double dXm_dr2 = dXm[npd + 0];
+				const double dXm_dr3 = dXm[2 * npd + 0];
+				const double dXm_ds1 = dXm[1];
+				const double dXm_ds2 = dXm[npd + 1];
+				const double dXm_ds3 = dXm[2 * npd + 1];
+				Normal[0] = dXm_dr2 * dXm_ds3 - dXm_dr3 * dXm_ds2;
+				Normal[1] = dXm_dr3 * dXm_ds1 - dXm_dr1 * dXm_ds3;
+				Normal[2] = dXm_dr1 * dXm_ds2 - dXm_dr2 * dXm_ds1;
 
-				const double dxs_dr1 = dxs[0];
-				const double dxs_dr2 = dxs[npd + 0];
-				const double dxs_dr3 = dxs[2 * npd + 0];
-				const double dxs_ds1 = dxs[1];
-				const double dxs_ds2 = dxs[npd + 1];
-				const double dxs_ds3 = dxs[2 * npd + 1];
-				normal[0] = dxs_dr2 * dxs_ds3 - dxs_dr3 * dxs_ds2;
-				normal[1] = dxs_dr3 * dxs_ds1 - dxs_dr1 * dxs_ds3;
-				normal[2] = dxs_dr1 * dxs_ds2 - dxs_dr2 * dxs_ds1;
+				const double dxm_dr1 = dxm[0];
+				const double dxm_dr2 = dxm[npd + 0];
+				const double dxm_dr3 = dxm[2 * npd + 0];
+				const double dxm_ds1 = dxm[1];
+				const double dxm_ds2 = dxm[npd + 1];
+				const double dxm_ds3 = dxm[2 * npd + 1];
+				normal[0] = dxm_dr2 * dxm_ds3 - dxm_dr3 * dxm_ds2;
+				normal[1] = dxm_dr3 * dxm_ds1 - dxm_dr1 * dxm_ds3;
+				normal[2] = dxm_dr1 * dxm_ds2 - dxm_dr2 * dxm_ds1;
 			}
 
-			const double jacobian = sqrt(Normal[0] * Normal[0] + Normal[1] * Normal[1] + Normal[2] * Normal[2]);
+			double jacobian = sqrt(Normal[0] * Normal[0] + Normal[1] * Normal[1] + Normal[2] * Normal[2]);
+			if (isAxisymmetric)
+				jacobian *= 2 * M_PI * Xg[0];
+
 			const double normal_length = sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
 			normal[0] /= normal_length;
 			normal[1] /= normal_length;
@@ -404,17 +590,51 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 				GPs[(nsd + 2) * GPs_len + i + g] = GAPs[g];
 			}
 
-			if (GAPs[g] > 0.0)
+			if (GAPs[g] < -1e-8)
 			{
-				GPs[(2 * nsd + 3) * GPs_len + i + g] = 0;
+				GPs[(nsd + npd + 3) * GPs_len + i + g] = 0;
 				continue;
 			}
 			else
 			{
-				GPs[(2 * nsd + 3) * GPs_len + i + g] = 1;
+				GPs[(nsd + npd + 3) * GPs_len + i + g] = 1;
 			}
 
-			printf("n_seg = %i, seg = %i\n", n_seg, i);
+			double t_N = -epsN * GAPs[g];
+			bool isStick = false;
+
+			// Check slip function:
+			if (norm_t_T + mu * t_N <= 0)
+			{
+				// printf("stick ");
+				isStick = true;
+				for (int pdf = 0; pdf < npd; ++pdf)
+				{
+					GPs[(nsd + npd + 7 + pdf) * GPs_len + i + g] = t_T[pdf];
+				}
+			}
+			else
+			{
+				isStick = false;
+				// printf("slip ");
+				for (int pdf = 0; pdf < npd; ++pdf)
+				{
+					if (norm_t_T > 1e-10)
+					{
+						t_T[pdf] = -mu * t_N * p_T[pdf];
+					}
+					else
+					{
+						t_T[pdf] = 0.0;
+					}
+					GPs[(nsd + npd + 7 + pdf) * GPs_len + i + g] = t_T[pdf];
+				}
+			}
+
+			double tau[3];
+			tau[0] = dxm[0];
+			tau[1] = dxm[1];
+			tau[2] = 0.0;
 
 			// evaluate shape functions and contact residual vectors:
 			for (int j = 0; j < nsn; ++j)
@@ -425,30 +645,54 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 				for (int sdf = 0; sdf < nsd; ++sdf)
 				{
 
-					C_s[j * nsd + sdf] += hs * normal[sdf];
-					C_m[j * nsd + sdf] -= hm * normal[sdf];
-					Gc[segmentNodesIDs[j] * nsd + sdf] -= epss * GAPs[g] * hs * normal[sdf] * gw[g] * jacobian;
-					Gc_loc[(i + g) * (j * nsd + sdf) + i / ngp] -= epss * GAPs[g] * hs * normal[sdf] * gw[g] * jacobian;
+					Ns[j * nsd + sdf] += hs;
+					C_Ns[j * nsd + sdf] += hs * normal[sdf];
+					C_Nm[j * nsd + sdf] += hm * normal[sdf];
+
+					Nm1[j * nsd + sdf] += dHm[j];
+					C_Ts1[j * nsd + sdf] += hs * tau[sdf]; // dXm[sdf*npd];
+					C_Tm1[j * nsd + sdf] += hm * tau[sdf]; // dXm[sdf*npd];
+					C_Nm1[j * nsd + sdf] += dHm[j] * normal[sdf];
+					C_Pm1[j * nsd + sdf] += dHm[j] * p_T[0];
+
+					if (npd == 2)
+					{
+						Nm2[j * nsd + sdf] += dHm[nsn + j];
+						C_Ts2[j * nsd + sdf] += hs * dxm[sdf * npd + 1];
+						C_Tm2[j * nsd + sdf] += hm * dxm[sdf * npd + 1];
+						C_Nm2[j * nsd + sdf] += dHm[nsn + j] * normal[sdf];
+						C_Pm2[j * nsd + sdf] += dHm[nsn + j] * p_T[1];
+					}
+
+					Gc[segmentNodesIDs[j] * nsd + sdf] += t_N * hs * normal[sdf] * gw[g] * jacobian;
+					Gc[segmentNodesIDm[j] * nsd + sdf] -= t_N * hm * normal[sdf] * gw[g] * jacobian;
+
+					Gc_loc[(i + g) * (j * nsd + sdf) + i / ngp] += t_N * hs * normal[sdf] * gw[g] * jacobian;
+					Gc_loc[segmentNodesIDm[j] * nsd + sdf + 1] -= t_N * hm * normal[sdf] * gw[g] * jacobian;
+
+					/*
+					for (int pdf = 0; pdf < npd; ++pdf) {
+					  Gc[segmentNodesIDs[j] * nsd + sdf]   -= t_T[pdf]*hs*tau[sdf] * gw[g] * jacobian;
+					  Gc_loc[ (i+g)*(j*nsd + sdf) + i/ngp] -= t_T[pdf]*hs*tau[sdf] * gw[g] * jacobian;
+					}
+					*/
 				}
 			}
 
 			if (keyAssembleKc)
 			{
-				// if (i < 0.5*GPs_len) {
 				for (int j = 0; j < nsn * nsd; ++j)
 				{ // loop over cols
 					for (int k = 0; k < nsn * nsd; ++k)
 					{ // loop over rows
-
 						// Kc elementu je blokova matice o strukture:
-						// Kc_e = [C_m*C_m'  C_m*C_s'
-						//         C_s*C_m'  C_s*C_s'];
+						// Kc_e = [C_Nm*C_Nm'  C_Nm*C_Ns'
+						//         C_Ns*C_Nm'  C_Ns*C_Ns'];
 						// dimeze: [(nsn*nsd)*(nsn*nsd)  (nsn*nsd)*(nsn*nsd)
 						//          (nsn*nsd)*(nsn*nsd)  (nsn*nsd)*(nsn*nsd)];
-						Kc[(i + g) * 2 * nsn * nsd * k + (i + g) * j + i / ngp] = 0.5 * C_m[j] * C_m[k] * gw[g] * jacobian;
-						Kc[(i + g) * 2 * nsn * nsd * k + (i + g) * (nsn * nsd + j) + i / ngp] = 0.5 * C_s[j] * C_m[k] * gw[g] * jacobian;
-						Kc[(i + g) * 2 * nsn * nsd * (nsn * nsd + k) + (i + g) * j + i / ngp] = 0.5 * C_m[j] * C_s[k] * gw[g] * jacobian;
-						Kc[(i + g) * 2 * nsn * nsd * (nsn * nsd + k) + (i + g) * (nsn * nsd + j) + i / ngp] = 0.5 * C_s[j] * C_s[k] * gw[g] * jacobian;
+
+						Kc[(i + g) * 2 * nsn * nsd * k + (i + g) * (nsn * nsd + j) + i / ngp] = C_Ns[j] * C_Nm[k] * gw[g] * jacobian;
+						Kc[(i + g) * 2 * nsn * nsd * (nsn * nsd + k) + (i + g) * (nsn * nsd + j) + i / ngp] = C_Ns[j] * C_Ns[k] * gw[g] * jacobian;
 
 						const int jdof = j % nsd;
 						const int jnode = (j - jdof) / nsd; // row node
@@ -456,55 +700,141 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 						const int kdof = k % nsd;
 						const int knode = (k - kdof) / nsd; // col node
 
-						if (fabs(C_m[j] * C_m[k]) > 1e-50)
-						{
-							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDm[knode] * nsd + kdof + 1;
-							vals[*len] = 0.5 * C_m[j] * C_m[k] * gw[g] * jacobian;
-							(*len)++;
-							if (*len >= len_guess)
-								printf("Error, len is too small: len = %i.\n", len_guess);
-						}
+						/////////////////// Normal contact /////////////////////////////
 
-						if (fabs(C_s[j] * C_m[k]) > 1e-50)
-						{
-							cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDm[knode] * nsd + kdof + 1;
-							vals[*len] = 0.5 * C_s[j] * C_m[k] * gw[g] * jacobian;
-							(*len)++;
-							if (*len >= len_guess)
-								printf("Error, len is too small: len = %i.\n", len_guess);
-						}
-
-						if (fabs(C_m[j] * C_s[k]) > 1e-50)
-						{
-							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = 0.5 * C_m[j] * C_s[k] * gw[g] * jacobian;
-							(*len)++;
-							if (*len >= len_guess)
-								printf("Error, len is too small: len = %i.\n", len_guess);
-						}
-
-						if (fabs(C_s[j] * C_s[k]) > 1e-50)
+						if (fabs(C_Ns[k] * C_Ns[j]) > 1e-50)
 						{
 							cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = 0.5 * C_s[j] * C_s[k] * gw[g] * jacobian;
+							vals[*len] = epsN * (C_Ns[k] * C_Ns[j]) * gw[g] * jacobian;
 							(*len)++;
 							if (*len >= len_guess)
 								printf("Error, len is too small: len = %i.\n", len_guess);
+						}
+
+						if (fabs(C_Nm[k] * C_Nm[j]) > 1e-50)
+						{
+							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDm[knode] * nsd + kdof + 1;
+							vals[*len] = epsN * (C_Nm[k] * C_Nm[j]) * gw[g] * jacobian;
+							(*len)++;
+							if (*len >= len_guess)
+								printf("Error, len is too small: len = %i.\n", len_guess);
+						}
+
+						if (fabs(C_Ns[k] * C_Nm[j]) > 1e-50)
+						{
+							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+							vals[*len] = epsN * (-C_Ns[k] * C_Nm[j]) * gw[g] * jacobian;
+							(*len)++;
+							if (*len >= len_guess)
+								printf("Error, len is too small: len = %i.\n", len_guess);
+						}
+
+						if (fabs(C_Nm[k] * C_Ns[j]) > 1e-50)
+						{
+							cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDm[knode] * nsd + kdof + 1;
+							vals[*len] = epsN * (-C_Nm[k] * C_Ns[j]) * gw[g] * jacobian;
+							(*len)++;
+							if (*len >= len_guess)
+								printf("Error, len is too small: len = %i.\n", len_guess);
+						}
+
+						/*
+						if(fabs(C_Ts1[k] * C_Nm1[j]) > 1e-50) {
+						  cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+						  rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+						  vals[*len] = +t_N * invmm[0] * (C_Ts1[k] * C_Nm1[j]) * gw[g] * jacobian;
+						  (*len)++;
+						  if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+						}
+						*/
+
+						if (isStick)
+						{	////////////////// stick ///////////////////
+							/*
+						  cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+							vals[*len] = +epsT * invmm[0] *(C_Ts1[k] * C_Ts1[j]) * gw[g] * jacobian;
+							(*len)++;
+							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+
+							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+							vals[*len] = +epsT * invmm[0] *(-C_Ts1[k] * C_Tm1[j]) * gw[g] * jacobian;
+							(*len)++;
+							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+
+							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+							vals[*len] = +epsT * invmm[0] *(-GAPs[g] * C_Ts1[k] * C_Nm1[j]) * gw[g] * jacobian;
+							(*len)++;
+							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+
+							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+							vals[*len] = -t_T[0] * (Ns[k] * Nm1[j]) * gw[g] * jacobian;
+							(*len)++;
+							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+							*/
+						}
+						else
+						{	////////////////////// slip ////////////////////////
+							/*
+							cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+							vals[*len] = +mu * epsN * p_T[0] * (C_Ts1[k] * C_Ns[j]) * gw[g] * jacobian;
+							(*len)++;
+							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+
+							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+							vals[*len] = +mu * epsN * p_T[0] * (-C_Ts1[k] * C_Nm[j]) * gw[g] * jacobian;
+							(*len)++;
+							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+
+							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+							vals[*len] = +mu * t_N * p_T[0] * p_T[0] * (C_Ts1[k] * C_Pm1[j]) * gw[g] * jacobian;
+							(*len)++;
+							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+
+							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+							vals[*len] = -t_T[0] * (Ns[k] * Nm1[j]) * gw[g] * jacobian;
+							(*len)++;
+							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+							*/
 						}
 					}
 				}
 			}
+
 			// Fill C_m array by zeros:
 			for (int j = 0; j < nsn * nsd; ++j)
 			{
-				C_s[j] = 0.0;
-				C_m[j] = 0.0;
+				Ns[j] = 0.0;
+				C_Ns[j] = 0.0;
+				C_Nm[j] = 0.0;
+
+				Nm1[j] = 0.0;
+				C_Ts1[j] = 0.0;
+				C_Tm1[j] = 0.0;
+				C_Nm1[j] = 0.0;
+				C_Pm1[j] = 0.0;
+
+				if (npd == 2)
+				{
+					Nm2[j] = 0.0;
+					C_Ts2[j] = 0.0;
+					C_Tm2[j] = 0.0;
+					C_Nm2[j] = 0.0;
+					C_Pm2[j] = 0.0;
+				}
 			}
-			//}
+
 		} // loop over gausspoints
 	}	  // loop over GPs rows
 
@@ -518,16 +848,34 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 	delete[] dxs;
 	delete[] GAPs;
 	delete[] activeGPs;
-	delete[] C_s;
-	delete[] C_m;
+	delete[] Ns;
+	delete[] C_Ns;
+	delete[] C_Nm;
+	delete[] Nm1;
+	delete[] C_Ts1;
+	delete[] C_Tm1;
+	delete[] C_Nm1;
+	delete[] C_Pm1;
+
+	delete[] C_Ts2;
+	delete[] C_Tm2;
+	delete[] Nm2;
+	delete[] C_Nm2;
+	delete[] C_Pm2;
 	delete[] Hm;
 	delete[] dHm;
+	delete[] Xi_m;
+	delete[] Xi0_m;
+	delete[] t_T;
+	delete[] t_T0;
 }
 
-void getLongestEdgeAndGPs(double *longestEdge, double *GPs, int n, int nsd, int ngp, int neq, int nsn, int nes, int nen, int *elementID, int *segmentID, int *ISN, int *IEN, double *H, double *X)
+void getLongestEdgeAndGPs(double *longestEdge, double *GPs, int n, int nsd, int npd, int ngp, int neq, int nsn, int nes, int nen, int *elementID, int *segmentID, int *ISN, int *IEN, double *H, double *X)
 {
-	// GPs legend:              Xg    els  sgs   gap  Xm    isActive elm sgm
-	// double* GPs = new double[n*(nsd + 1 + 1  + 1  + nsd + 1       + 1 + 1)];
+	// GPs legend:              Xg     els  sgs   gap    Xi_m  isActive      elm      sgm      isStick      t_T       Xi0_m
+	// double* GPs = new double[n*(nsd + 1 +  1  +  1  +  npd  +   1     +     1    +   1     +    1    +    npd   +    npd    ];
+	// index of begining           0    nsd nsd+1 nsd+2  nsd+3  nsd+npd+3  nsd+npd+4 nsd+npd+5 nsd+npd+6  nsd+npd+7 nsd+2*npd+7  (size = nsd+3*npd+7)
+
 	int *segmentNodesID = new int[nsn];
 	double *Xs = new double[nsn * nsd];
 	double *Xg = new double[ngp * nsd];
@@ -562,15 +910,31 @@ void getLongestEdgeAndGPs(double *longestEdge, double *GPs, int n, int nsd, int 
 				}
 
 				GPs[sdf * n * ngp + g] = Xg[i * nsd + sdf]; // slave gausspoint coords
-				GPs[(nsd + 3 + sdf) * n * ngp + g] = 0.0;	// init baricentric coords
+															// GPs[(nsd + 3 + sdf)*n*ngp + g] = 0.0; // init master parametric coords Xi_m
 			}
-			GPs[nsd * n * ngp + g] = el + 1;		// slave element
-			GPs[(nsd + 1) * n * ngp + g] = sg + 1;	// slave segment
-			GPs[(nsd + 2) * n * ngp + g] = FLT_MAX; // init gap
-			GPs[(2 * nsd + 3) * n * ngp + g] = 0;	// init is NO active
-			GPs[(2 * nsd + 4) * n * ngp + g] = 0;	// master element
-			GPs[(2 * nsd + 5) * n * ngp + g] = 0;	// master segment
 
+			GPs[(nsd + 0) * n * ngp + g] = el + 1;	 // slave element
+			GPs[(nsd + 1) * n * ngp + g] = sg + 1;	 // slave segment
+			GPs[(nsd + 2) * n * ngp + g] = -FLT_MAX; // init gap
+
+			for (int pdf = 0; pdf < npd; ++pdf)
+			{
+				GPs[(nsd + 3 + pdf) * n * ngp + g] = 0.0; // Xi_m
+			}
+
+			GPs[(nsd + npd + 3) * n * ngp + g] = 0; // init is NO active
+			GPs[(nsd + npd + 4) * n * ngp + g] = 0; // master element
+			GPs[(nsd + npd + 5) * n * ngp + g] = 0; // master segment
+			GPs[(nsd + npd + 6) * n * ngp + g] = 0; // is stick
+
+			for (int pdf = 0; pdf < nsd - 1; ++pdf)
+			{
+				GPs[(nsd + npd + 7 + pdf) * n * ngp + g] = 0.0; // tangent traction components
+			}
+			for (int pdf = 0; pdf < nsd - 1; ++pdf)
+			{
+				GPs[(nsd + 2 * npd + 7 + pdf) * n * ngp + g] = 0.0; // Xi0_m
+			}
 			g++;
 		}
 
@@ -635,6 +999,10 @@ void getAABB(double *AABBmin, double *AABBmax, int nsd, int nnod, double *X, dou
 void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double *AABBmin, double *AABBmax, int *head, int *next, double *X, int *elementID, int *segmentID, int n, int nsn, int nsd, int npd, int ngp, int nen, int nes, int neq, double longestEdge)
 {
 
+	// GPs legend:              Xg     els  sgs   gap    Xi_m  isActive      elm      sgm      isStick      t_T       Xi0_m
+	// double* GPs = new double[n*(nsd + 1 +  1  +  1  +  npd  +   1     +     1    +   1     +    1    +    npd   +    npd    ];
+	// index of begining           0    nsd nsd+1 nsd+2  nsd+3  nsd+npd+3  nsd+npd+4 nsd+npd+5 nsd+npd+6  nsd+npd+7 nsd+2*npd+7  (size = nsd+3*npd+7)
+
 	int *segmentNodesID = new int[nsn];
 	double *Xm = new double[nsn * nsd];
 	double *Xmin = new double[nsd];
@@ -651,9 +1019,10 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 		ntr = 4;
 	}
 
+	// Initialize the gap by minus float max value:
 	for (int i = 0; i < n * ngp; ++i)
 	{
-		GPs[(nsd + 2) * n * ngp + i] = FLT_MAX;
+		GPs[(nsd + 2) * n * ngp + i] = -FLT_MAX;
 	}
 
 	for (int e = 0; e < n; ++e)
@@ -828,6 +1197,16 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 
 						while (v != -1)
 						{
+
+							// Jump if Gausspoint segment is equal to master segment
+							int els = GPs[nsd * n * ngp + v] - 1;		// slave element
+							int sgs = GPs[(nsd + 1) * n * ngp + v] - 1; // slave segment
+							if (el == els && sg == sgs)
+							{
+								v = next[v];
+								continue;
+							}
+
 							double d;
 							// Inside-outside algorithm:
 							bool isInside = false;
@@ -843,18 +1222,20 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 									d += r[i] * t1[i];
 									t1_norm += t1[i] * t1[i];
 								}
-								d = sqrt(d);
 								t1_norm = sqrt(t1_norm);
+								d = d / t1_norm;
+
 								// Check if inside edge1:
 								if (d > 0.0 && d < t1_norm)
 								{
 									isInside = true;
-									d = 0.0;
 									double sign = 0.0;
+									double d_aux = d;
+									d = 0.0;
 									for (int i = 0; i < nsd; ++i)
 									{
-										Xp[i] = Xm[i * nsn + 0] + t1[i] / t1_norm * r[i] * t1[i] / t1_norm;
-										sign += (Xg[i] - Xp[i]) * normal[i];
+										Xp[i] = Xm[i * nsn + 0] + d_aux * t1[i] / t1_norm;
+										sign += -(Xg[i] - Xp[i]) * normal[i];
 										d += pow(Xg[i] - Xp[i], 2);
 									}
 									d = sqrt(d);
@@ -915,8 +1296,8 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 
 							if (isInside)
 							{
-								// If distance is less then current closest distance:
-								if (d < GPs[(nsd + 2) * n * ngp + v])
+								// If distance is greater then the current closest distance:
+								if (d > GPs[(nsd + 2) * n * ngp + v] && d < 25)
 								{
 
 									// Initial guess of the parametric coordinates on the triangle:
@@ -981,7 +1362,6 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 											s_len;
 
 										s = 2 * s - 1;
-										// printf("r0 = %f, s0 = %f\n", r, s);
 									}
 
 									// Local contact search by Least-square projection method:
@@ -994,6 +1374,9 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 										{
 										case 2:
 											sfd2(Hm, dHm, r);
+											break;
+										case 4:
+											sfd4(Hm, dHm, r, s);
 											break;
 										case 6:
 											sfd6(Hm, dHm, r, s);
@@ -1053,7 +1436,6 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 											dr = invA11 * b1;
 											r += dr;
 											dr_norm = dr;
-											printf("r = %f, dr_norm = %f\n", r, dr_norm);
 										}
 
 										if (npd == 2)
@@ -1068,7 +1450,6 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 											r += dr;
 											s += ds;
 											dr_norm = sqrt(dr * dr + ds * ds);
-											// printf("r = %f, s = %f, dr_norm = %f\n", r, s, dr_norm);
 										}
 
 										niter++;
@@ -1080,15 +1461,60 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 									}
 
 									GPs[(nsd + 2) * n * ngp + v] = d; // store penetration
-									if (d < 0)
+
+									if (d > -1e-10)
 									{
-										GPs[(2 * nsd + 3) * n * ngp + v] = 1.0;	   // set gausspoint to active state
-										GPs[(2 * nsd + 4) * n * ngp + v] = el + 1; // set master element
-										GPs[(2 * nsd + 5) * n * ngp + v] = sg + 1; // set master segment
+
+										// const bool isActive = (bool) GPs[(nsd + npd + 3)*n*ngp + v];
+
+										GPs[(nsd + npd + 3) * n * ngp + v] = 1.0;	 // set gausspoint to active state
+										GPs[(nsd + npd + 4) * n * ngp + v] = el + 1; // set master element
+										GPs[(nsd + npd + 5) * n * ngp + v] = sg + 1; // set master segment
+
+										// Move Xi_m to Xi0_m:
+										/*
+										GPs[(nsd + 2*npd + 7)*n*ngp + v] = GPs[(nsd + 3)*n*ngp + v];
+										if (npd == 2) {
+										  GPs[(nsd + 2*npd + 8)*n*ngp + v] = GPs[(nsd + 4)*n*ngp + v];
+										}
+										*/
+
+										// Update Xi_m
 										GPs[(nsd + 3) * n * ngp + v] = r;
 										if (npd == 2)
 										{
 											GPs[(nsd + 4) * n * ngp + v] = s;
+										}
+
+										/*
+										// If new contact, set Xi_m = Xi0_m:
+										if(isActive == false) {
+										  GPs[(nsd + 2*npd + 7)*n*ngp + v] = r;
+										  if (npd == 2) {
+										GPs[(nsd + 2*npd + 8)*n*ngp + v] = s;
+										  }
+										}
+										*/
+									}
+									else
+									{
+										GPs[(nsd + 2) * n * ngp + v] = -FLT_MAX; // init gap
+										for (int pdf = 0; pdf < npd; ++pdf)
+										{
+											GPs[(nsd + 3 + pdf) * n * ngp + v] = 0.0; // Xi_m
+										}
+										GPs[(nsd + npd + 3) * n * ngp + v] = 0; // init is NO active
+										GPs[(nsd + npd + 4) * n * ngp + v] = 0; // master element
+										GPs[(nsd + npd + 5) * n * ngp + v] = 0; // master segment
+										GPs[(nsd + npd + 6) * n * ngp + v] = 0; // is stick
+
+										for (int pdf = 0; pdf < nsd - 1; ++pdf)
+										{
+											GPs[(nsd + npd + 7 + pdf) * n * ngp + v] = 0.0; // tangent traction components
+										}
+										for (int pdf = 0; pdf < nsd - 1; ++pdf)
+										{
+											GPs[(nsd + 2 * npd + 7 + pdf) * n * ngp + v] = 0.0; // Xi0_m
 										}
 									}
 								} // if d is less then

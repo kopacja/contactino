@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5] - 2019-10-25
+
+### Added
+
+- sfd4() i.e. four-node quad contact element in 3D
+- Support of friction using epsN, epsT and mu
+- npd (=Number of Parametric Dimensions)
+- Support of axisymmetry using isAxisymmetric key
+- Max penetration less then constant 25
+
+### Fixed
+
+- Skip the Gausspoint of the linkedList if its segment index is equal to the master's one
+
+### Changed
+
+- master element/segment index moved in GPs table
+- (GAPs[g] > 0.0) changed to (GAPs[g] < -1e-8)
+
 ## [0.0.4] - 2017-08-22
 
 ### Added
@@ -67,7 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only sfd6() i.e. quadratic triangle contact element in 3D
 - All arrays are 1D
 
-[unreleased]: https://github.com/kopacja/contactino/compare/v0.0.4...HEAD
+[unreleased]: https://github.com/kopacja/contactino/compare/v0.0.5...HEAD
+[0.0.5]: https://github.com/kopacja/contactino/releases/tag/v0.0.5
 [0.0.4]: https://github.com/kopacja/contactino/releases/tag/v0.0.4
 [0.0.3]: https://github.com/kopacja/contactino/releases/tag/v0.0.3
 [0.0.2]: https://github.com/kopacja/contactino/releases/tag/v0.0.2
