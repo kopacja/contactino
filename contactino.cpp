@@ -532,18 +532,28 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 			}
 
 			// Evaluate normal vector:
-			double Normal[3]; // normal to initial surface
-			double normal[3]; // normal to the current surface
+			double Normal_m[3]; // normal to initial master surface
+			double normal_m[3]; // normal to the current master surface
+			double Normal_s[3]; // normal to initial slave surface
+			double normal_s[3]; // normal to the current slave surface
 
 			if (nsd == 2)
 			{
-				Normal[0] = dXm[1];
-				Normal[1] = -dXm[0];
-				Normal[2] = 0.0;
+				Normal_m[0] = dXm[1];
+				Normal_m[1] = -dXm[0];
+				Normal_m[2] = 0.0;
 
-				normal[0] = dxm[1];
-				normal[1] = -dxm[0];
-				normal[2] = 0.0;
+				normal_m[0] = dxm[1];
+				normal_m[1] = -dxm[0];
+				normal_m[2] = 0.0;
+
+				Normal_s[0] = dXs[1];
+				Normal_s[1] = -dXs[0];
+				Normal_s[2] = 0.0;
+
+				normal_s[0] = dxs[1];
+				normal_s[1] = -dxs[0];
+				normal_s[2] = 0.0;
 			}
 			else if (nsd == 3)
 			{
@@ -556,9 +566,9 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 				const double dXm_ds1 = dXm[1];
 				const double dXm_ds2 = dXm[npd + 1];
 				const double dXm_ds3 = dXm[2 * npd + 1];
-				Normal[0] = dXm_dr2 * dXm_ds3 - dXm_dr3 * dXm_ds2;
-				Normal[1] = dXm_dr3 * dXm_ds1 - dXm_dr1 * dXm_ds3;
-				Normal[2] = dXm_dr1 * dXm_ds2 - dXm_dr2 * dXm_ds1;
+				Normal_m[0] = dXm_dr2 * dXm_ds3 - dXm_dr3 * dXm_ds2;
+				Normal_m[1] = dXm_dr3 * dXm_ds1 - dXm_dr1 * dXm_ds3;
+				Normal_m[2] = dXm_dr1 * dXm_ds2 - dXm_dr2 * dXm_ds1;
 
 				const double dxm_dr1 = dxm[0];
 				const double dxm_dr2 = dxm[npd + 0];
@@ -566,23 +576,48 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 				const double dxm_ds1 = dxm[1];
 				const double dxm_ds2 = dxm[npd + 1];
 				const double dxm_ds3 = dxm[2 * npd + 1];
-				normal[0] = dxm_dr2 * dxm_ds3 - dxm_dr3 * dxm_ds2;
-				normal[1] = dxm_dr3 * dxm_ds1 - dxm_dr1 * dxm_ds3;
-				normal[2] = dxm_dr1 * dxm_ds2 - dxm_dr2 * dxm_ds1;
+				normal_m[0] = dxm_dr2 * dxm_ds3 - dxm_dr3 * dxm_ds2;
+				normal_m[1] = dxm_dr3 * dxm_ds1 - dxm_dr1 * dxm_ds3;
+				normal_m[2] = dxm_dr1 * dxm_ds2 - dxm_dr2 * dxm_ds1;
+
+				const double dXs_dr1 = dXs[0];
+				const double dXs_dr2 = dXs[npd + 0];
+				const double dXs_dr3 = dXs[2 * npd + 0];
+				const double dXs_ds1 = dXs[1];
+				const double dXs_ds2 = dXs[npd + 1];
+				const double dXs_ds3 = dXs[2 * npd + 1];
+				Normal_s[0] = dXs_dr2 * dXs_ds3 - dXs_dr3 * dXs_ds2;
+				Normal_s[1] = dXs_dr3 * dXs_ds1 - dXs_dr1 * dXs_ds3;
+				Normal_s[2] = dXs_dr1 * dXs_ds2 - dXs_dr2 * dXs_ds1;
+
+				const double dxs_dr1 = dxs[0];
+				const double dxs_dr2 = dxs[npd + 0];
+				const double dxs_dr3 = dxs[2 * npd + 0];
+				const double dxs_ds1 = dxs[1];
+				const double dxs_ds2 = dxs[npd + 1];
+				const double dxs_ds3 = dxs[2 * npd + 1];
+				normal_s[0] = dxs_dr2 * dxs_ds3 - dxs_dr3 * dxs_ds2;
+				normal_s[1] = dxs_dr3 * dxs_ds1 - dxs_dr1 * dxs_ds3;
+				normal_s[2] = dxs_dr1 * dxs_ds2 - dxs_dr2 * dxs_ds1;
 			}
 
-			double jacobian = sqrt(Normal[0] * Normal[0] + Normal[1] * Normal[1] + Normal[2] * Normal[2]);
+			double jacobian_s = sqrt(Normal_s[0] * Normal_s[0] + Normal_s[1] * Normal_s[1] + Normal_s[2] * Normal_s[2]);
 			if (isAxisymmetric)
-				jacobian *= 2 * M_PI * Xg[0];
+				jacobian_s *= 2 * M_PI * Xg[0];
 
-			const double normal_length = sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
-			normal[0] /= normal_length;
-			normal[1] /= normal_length;
-			normal[2] /= normal_length;
+			const double normal_m_length = sqrt(normal_m[0] * normal_m[0] + normal_m[1] * normal_m[1] + normal_m[2] * normal_m[2]);
+			normal_m[0] /= normal_m_length;
+			normal_m[1] /= normal_m_length;
+			normal_m[2] /= normal_m_length;
+
+			const double normal_s_length = sqrt(normal_s[0] * normal_s[0] + normal_s[1] * normal_s[1] + normal_s[2] * normal_s[2]);
+			normal_s[0] /= normal_s_length;
+			normal_s[1] /= normal_s_length;
+			normal_s[2] /= normal_s_length;
 
 			if (!keyContactDetection)
 			{
-				const double signGAPs = (Xp[0] - Xg[0]) * normal[0] + (Xp[1] - Xg[1]) * normal[1] + (Xp[2] - Xg[2]) * normal[2];
+				const double signGAPs = (Xp[0] - Xg[0]) * normal_m[0] + (Xp[1] - Xg[1]) * normal_m[1] + (Xp[2] - Xg[2]) * normal_m[2];
 				if (signGAPs <= 0)
 				{
 					GAPs[g] = -GAPs[g];
@@ -616,7 +651,7 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 			else
 			{
 				isStick = false;
-				// printf("slip ");
+				printf("slip ");
 				for (int pdf = 0; pdf < npd; ++pdf)
 				{
 					if (norm_t_T > 1e-10)
@@ -646,13 +681,13 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 				{
 
 					Ns[j * nsd + sdf] += hs;
-					C_Ns[j * nsd + sdf] += hs * normal[sdf];
-					C_Nm[j * nsd + sdf] += hm * normal[sdf];
+					C_Ns[j * nsd + sdf] += hs * normal_m[sdf];
+					C_Nm[j * nsd + sdf] += hm * normal_m[sdf];
 
 					Nm1[j * nsd + sdf] += dHm[j];
 					C_Ts1[j * nsd + sdf] += hs * tau[sdf]; // dXm[sdf*npd];
 					C_Tm1[j * nsd + sdf] += hm * tau[sdf]; // dXm[sdf*npd];
-					C_Nm1[j * nsd + sdf] += dHm[j] * normal[sdf];
+					C_Nm1[j * nsd + sdf] += dHm[j] * normal_m[sdf];
 					C_Pm1[j * nsd + sdf] += dHm[j] * p_T[0];
 
 					if (npd == 2)
@@ -660,20 +695,17 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 						Nm2[j * nsd + sdf] += dHm[nsn + j];
 						C_Ts2[j * nsd + sdf] += hs * dxm[sdf * npd + 1];
 						C_Tm2[j * nsd + sdf] += hm * dxm[sdf * npd + 1];
-						C_Nm2[j * nsd + sdf] += dHm[nsn + j] * normal[sdf];
+						C_Nm2[j * nsd + sdf] += dHm[nsn + j] * normal_m[sdf];
 						C_Pm2[j * nsd + sdf] += dHm[nsn + j] * p_T[1];
 					}
 
-					Gc[segmentNodesIDs[j] * nsd + sdf] += t_N * hs * normal[sdf] * gw[g] * jacobian;
-					Gc[segmentNodesIDm[j] * nsd + sdf] -= t_N * hm * normal[sdf] * gw[g] * jacobian;
-
-					Gc_loc[(i + g) * (j * nsd + sdf) + i / ngp] += t_N * hs * normal[sdf] * gw[g] * jacobian;
-					Gc_loc[segmentNodesIDm[j] * nsd + sdf + 1] -= t_N * hm * normal[sdf] * gw[g] * jacobian;
+					Gc[segmentNodesIDs[j] * nsd + sdf] += t_N * hs * normal_m[sdf] * gw[g] * jacobian_s;
+					Gc_loc[(i + g) * (j * nsd + sdf) + i / ngp] += t_N * hs * normal_m[sdf] * gw[g] * jacobian_s;
 
 					/*
 					for (int pdf = 0; pdf < npd; ++pdf) {
-					  Gc[segmentNodesIDs[j] * nsd + sdf]   -= t_T[pdf]*hs*tau[sdf] * gw[g] * jacobian;
-					  Gc_loc[ (i+g)*(j*nsd + sdf) + i/ngp] -= t_T[pdf]*hs*tau[sdf] * gw[g] * jacobian;
+					  Gc[segmentNodesIDs[j] * nsd + sdf]   -= t_T[pdf]*hs*tau[sdf] * gw[g] * jacobian_s;
+					  Gc_loc[ (i+g)*(j*nsd + sdf) + i/ngp] -= t_T[pdf]*hs*tau[sdf] * gw[g] * jacobian_s;
 					}
 					*/
 				}
@@ -691,8 +723,8 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 						// dimeze: [(nsn*nsd)*(nsn*nsd)  (nsn*nsd)*(nsn*nsd)
 						//          (nsn*nsd)*(nsn*nsd)  (nsn*nsd)*(nsn*nsd)];
 
-						Kc[(i + g) * 2 * nsn * nsd * k + (i + g) * (nsn * nsd + j) + i / ngp] = C_Ns[j] * C_Nm[k] * gw[g] * jacobian;
-						Kc[(i + g) * 2 * nsn * nsd * (nsn * nsd + k) + (i + g) * (nsn * nsd + j) + i / ngp] = C_Ns[j] * C_Ns[k] * gw[g] * jacobian;
+						Kc[(i + g) * 2 * nsn * nsd * k + (i + g) * (nsn * nsd + j) + i / ngp] = C_Ns[j] * C_Nm[k] * gw[g] * jacobian_s;
+						Kc[(i + g) * 2 * nsn * nsd * (nsn * nsd + k) + (i + g) * (nsn * nsd + j) + i / ngp] = C_Ns[j] * C_Ns[k] * gw[g] * jacobian_s;
 
 						const int jdof = j % nsd;
 						const int jnode = (j - jdof) / nsd; // row node
@@ -706,17 +738,7 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 						{
 							cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = epsN * (C_Ns[k] * C_Ns[j]) * gw[g] * jacobian;
-							(*len)++;
-							if (*len >= len_guess)
-								printf("Error, len is too small: len = %i.\n", len_guess);
-						}
-
-						if (fabs(C_Nm[k] * C_Nm[j]) > 1e-50)
-						{
-							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDm[knode] * nsd + kdof + 1;
-							vals[*len] = epsN * (C_Nm[k] * C_Nm[j]) * gw[g] * jacobian;
+							vals[*len] = epsN * (C_Ns[k] * C_Ns[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess)
 								printf("Error, len is too small: len = %i.\n", len_guess);
@@ -726,56 +748,46 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 						{
 							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = epsN * (-C_Ns[k] * C_Nm[j]) * gw[g] * jacobian;
+							vals[*len] = epsN * (-C_Ns[k] * C_Nm[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess)
 								printf("Error, len is too small: len = %i.\n", len_guess);
 						}
 
-						if (fabs(C_Nm[k] * C_Ns[j]) > 1e-50)
+						if (fabs(C_Ts1[k] * C_Nm1[j]) > 1e-50)
 						{
-							cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDm[knode] * nsd + kdof + 1;
-							vals[*len] = epsN * (-C_Nm[k] * C_Ns[j]) * gw[g] * jacobian;
+							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+							vals[*len] = +t_N * invmm[0] * (C_Ts1[k] * C_Nm1[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess)
 								printf("Error, len is too small: len = %i.\n", len_guess);
 						}
-
-						/*
-						if(fabs(C_Ts1[k] * C_Nm1[j]) > 1e-50) {
-						  cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
-						  rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-						  vals[*len] = +t_N * invmm[0] * (C_Ts1[k] * C_Nm1[j]) * gw[g] * jacobian;
-						  (*len)++;
-						  if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
-						}
-						*/
 
 						if (isStick)
 						{	////////////////// stick ///////////////////
 							/*
 						  cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +epsT * invmm[0] *(C_Ts1[k] * C_Ts1[j]) * gw[g] * jacobian;
+							vals[*len] = +epsT * invmm[0] *(C_Ts1[k] * C_Ts1[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
 							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +epsT * invmm[0] *(-C_Ts1[k] * C_Tm1[j]) * gw[g] * jacobian;
+							vals[*len] = +epsT * invmm[0] *(-C_Ts1[k] * C_Tm1[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
 							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +epsT * invmm[0] *(-GAPs[g] * C_Ts1[k] * C_Nm1[j]) * gw[g] * jacobian;
+							vals[*len] = +epsT * invmm[0] *(-GAPs[g] * C_Ts1[k] * C_Nm1[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
 							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = -t_T[0] * (Ns[k] * Nm1[j]) * gw[g] * jacobian;
+							vals[*len] = -t_T[0] * (Ns[k] * Nm1[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 							*/
@@ -785,25 +797,25 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 							/*
 							cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +mu * epsN * p_T[0] * (C_Ts1[k] * C_Ns[j]) * gw[g] * jacobian;
+							vals[*len] = +mu * epsN * p_T[0] * (C_Ts1[k] * C_Ns[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
 							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +mu * epsN * p_T[0] * (-C_Ts1[k] * C_Nm[j]) * gw[g] * jacobian;
+							vals[*len] = +mu * epsN * p_T[0] * (-C_Ts1[k] * C_Nm[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
 							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +mu * t_N * p_T[0] * p_T[0] * (C_Ts1[k] * C_Pm1[j]) * gw[g] * jacobian;
+							vals[*len] = +mu * t_N * p_T[0] * p_T[0] * (C_Ts1[k] * C_Pm1[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
 							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = -t_T[0] * (Ns[k] * Nm1[j]) * gw[g] * jacobian;
+							vals[*len] = -t_T[0] * (Ns[k] * Nm1[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 							*/
@@ -1198,7 +1210,7 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 						while (v != -1)
 						{
 
-							// Jump if Gausspoint segment is equal to master segment
+							// Jump if Gausspoit segment is equal to master segment
 							int els = GPs[nsd * n * ngp + v] - 1;		// slave element
 							int sgs = GPs[(nsd + 1) * n * ngp + v] - 1; // slave segment
 							if (el == els && sg == sgs)
