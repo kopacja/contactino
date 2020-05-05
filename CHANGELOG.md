@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.7] - 2020-05-05
+
+### Changed
+
+- Changed sign in inside-outside algorithm
+- In local search removed d_tmp and replaced by scalar product with normal
+
 ## [0.0.6] - 2020-03-30
 
 ### Added
@@ -13,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.0.5] - 2019-10-25
 
-### Added
+### Changed
 
 - sfd4() i.e. four-node quad contact element in 3D
 - Support of friction using epsN, epsT and mu
@@ -92,8 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only sfd6() i.e. quadratic triangle contact element in 3D
 - All arrays are 1D
 
-[unreleased]: https://github.com/kopacja/contactino/compare/v0.0.6...HEAD
-[0.0.6]: https://github.com/kopacja/contactino/releases/tag/v0.0.5
+[unreleased]: https://github.com/kopacja/contactino/compare/v0.0.7...HEAD
+[0.0.7]: https://github.com/kopacja/contactino/releases/tag/v0.0.7
+[0.0.6]: https://github.com/kopacja/contactino/releases/tag/v0.0.6
 [0.0.5]: https://github.com/kopacja/contactino/releases/tag/v0.0.5
 [0.0.4]: https://github.com/kopacja/contactino/releases/tag/v0.0.4
 [0.0.3]: https://github.com/kopacja/contactino/releases/tag/v0.0.3

@@ -1,5 +1,5 @@
 /**
-	\file contactino.cpp
+   \file contactino.cpp
 */
 #include <stdio.h>
 #include <stdlib.h>
@@ -412,6 +412,7 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 			}
 			else
 			{ // else the new gap is considered as the distance between the Gauss point and its projection onto the master segment:
+				// (sign is determinated later)
 				GAPs[g] = sqrt((Xp[0] - Xg[0]) * (Xp[0] - Xg[0]) + (Xp[1] - Xg[1]) * (Xp[1] - Xg[1]) + (Xp[2] - Xg[2]) * (Xp[2] - Xg[2]));
 			}
 
@@ -492,7 +493,8 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 				t_T0[pdf] = GPs[(nsd + npd + 7 + pdf) * GPs_len + i + g];
 				Xi0_m[pdf] = GPs[(nsd + 2 * npd + 7 + pdf) * GPs_len + i + g];
 			}
-			// Is stick is not necessary
+
+			// isStick is not necessary...
 			// const int isStick = (int)GPs[(nsd + npd + 6)*GPs_len + i + g];
 
 			// Evaluate trial tangent traction:
@@ -516,7 +518,7 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 			}
 			norm_t_T = sqrt(norm_t_T);
 
-			// Unit vector in the direction od slip:
+			// Unit vector in the direction of slip:
 			double p_T[2];
 			p_T[1] = 0.0;
 			for (int r = 0; r < npd; ++r)
@@ -603,7 +605,9 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 
 			double jacobian_s = sqrt(Normal_s[0] * Normal_s[0] + Normal_s[1] * Normal_s[1] + Normal_s[2] * Normal_s[2]);
 			if (isAxisymmetric)
+			{
 				jacobian_s *= 2 * M_PI * Xg[0];
+			}
 
 			const double normal_m_length = sqrt(normal_m[0] * normal_m[0] + normal_m[1] * normal_m[1] + normal_m[2] * normal_m[2]);
 			normal_m[0] /= normal_m_length;
@@ -625,7 +629,7 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 				GPs[(nsd + 2) * GPs_len + i + g] = GAPs[g];
 			}
 
-			if (GAPs[g] < -1e-8)
+			if (GAPs[g] < -1e-10)
 			{
 				GPs[(nsd + npd + 3) * GPs_len + i + g] = 0;
 				continue;
@@ -703,10 +707,10 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 					Gc_loc[(i + g) * (j * nsd + sdf) + i / ngp] += t_N * hs * normal_m[sdf] * gw[g] * jacobian_s;
 
 					/*
-					for (int pdf = 0; pdf < npd; ++pdf) {
+					  for (int pdf = 0; pdf < npd; ++pdf) {
 					  Gc[segmentNodesIDs[j] * nsd + sdf]   -= t_T[pdf]*hs*tau[sdf] * gw[g] * jacobian_s;
 					  Gc_loc[ (i+g)*(j*nsd + sdf) + i/ngp] -= t_T[pdf]*hs*tau[sdf] * gw[g] * jacobian_s;
-					}
+					  }
 					*/
 				}
 			}
@@ -717,6 +721,7 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 				{ // loop over cols
 					for (int k = 0; k < nsn * nsd; ++k)
 					{ // loop over rows
+
 						// Kc elementu je blokova matice o strukture:
 						// Kc_e = [C_Nm*C_Nm'  C_Nm*C_Ns'
 						//         C_Ns*C_Nm'  C_Ns*C_Ns'];
@@ -768,56 +773,56 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 						{	////////////////// stick ///////////////////
 							/*
 						  cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +epsT * invmm[0] *(C_Ts1[k] * C_Ts1[j]) * gw[g] * jacobian_s;
-							(*len)++;
-							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+						  rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+						  vals[*len] = +epsT * invmm[0] *(C_Ts1[k] * C_Ts1[j]) * gw[g] * jacobian_s;
+						  (*len)++;
+						  if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
-							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +epsT * invmm[0] *(-C_Ts1[k] * C_Tm1[j]) * gw[g] * jacobian_s;
-							(*len)++;
-							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+						  cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+						  rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+						  vals[*len] = +epsT * invmm[0] *(-C_Ts1[k] * C_Tm1[j]) * gw[g] * jacobian_s;
+						  (*len)++;
+						  if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
-							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +epsT * invmm[0] *(-GAPs[g] * C_Ts1[k] * C_Nm1[j]) * gw[g] * jacobian_s;
-							(*len)++;
-							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+						  cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+						  rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+						  vals[*len] = +epsT * invmm[0] *(-GAPs[g] * C_Ts1[k] * C_Nm1[j]) * gw[g] * jacobian_s;
+						  (*len)++;
+						  if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
-							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = -t_T[0] * (Ns[k] * Nm1[j]) * gw[g] * jacobian_s;
-							(*len)++;
-							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+						  cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+						  rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+						  vals[*len] = -t_T[0] * (Ns[k] * Nm1[j]) * gw[g] * jacobian_s;
+						  (*len)++;
+						  if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 							*/
 						}
 						else
 						{	////////////////////// slip ////////////////////////
 							/*
-							cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +mu * epsN * p_T[0] * (C_Ts1[k] * C_Ns[j]) * gw[g] * jacobian_s;
-							(*len)++;
-							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+						  cols[*len] = segmentNodesIDs[jnode] * nsd + jdof + 1;
+						  rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+						  vals[*len] = +mu * epsN * p_T[0] * (C_Ts1[k] * C_Ns[j]) * gw[g] * jacobian_s;
+						  (*len)++;
+						  if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
-							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +mu * epsN * p_T[0] * (-C_Ts1[k] * C_Nm[j]) * gw[g] * jacobian_s;
-							(*len)++;
-							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+						  cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+						  rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+						  vals[*len] = +mu * epsN * p_T[0] * (-C_Ts1[k] * C_Nm[j]) * gw[g] * jacobian_s;
+						  (*len)++;
+						  if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
-							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +mu * t_N * p_T[0] * p_T[0] * (C_Ts1[k] * C_Pm1[j]) * gw[g] * jacobian_s;
-							(*len)++;
-							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+						  cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+						  rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+						  vals[*len] = +mu * t_N * p_T[0] * p_T[0] * (C_Ts1[k] * C_Pm1[j]) * gw[g] * jacobian_s;
+						  (*len)++;
+						  if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 
-							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
-							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = -t_T[0] * (Ns[k] * Nm1[j]) * gw[g] * jacobian_s;
-							(*len)++;
-							if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+						  cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+						  rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
+						  vals[*len] = -t_T[0] * (Ns[k] * Nm1[j]) * gw[g] * jacobian_s;
+						  (*len)++;
+						  if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
 							*/
 						}
 					}
@@ -1008,6 +1013,31 @@ void getAABB(double *AABBmin, double *AABBmax, int nsd, int nnod, double *X, dou
 	delete[] segmentNodesID;
 }
 
+/*! Calculate contact residual term (gradient) and contact tangent term (Hessian)
+
+  \param GPs - 2d array (GPs_len x ??? cols)
+  \param ISN - 2d array (nsn*)
+  \param IEN -
+  \param N -
+  \param AABBmin -
+  \param AABBmax -
+  \param head -
+  \param next -
+  \param X - 2d array of contact nodal coordinates
+  \param elementID -
+  \param segmentID -
+  \param n - number of contact segments
+  \param nsn - Number of Segment Nodes
+  \param nsd - Number of Space Dimensions
+  \param npd - Number of Parametric Dimensions
+  \param ngp - Number of Gauss Points
+  \param nen - Number of Element Nodes
+  \param nes - Number of Element Segments
+  \param neq - Number of EQuations
+  \param longestEdge - length of the longest edge of all contact segments
+
+  \return GPs - 1d array
+*/
 void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double *AABBmin, double *AABBmax, int *head, int *next, double *X, int *elementID, int *segmentID, int n, int nsn, int nsd, int npd, int ngp, int nen, int nes, int neq, double longestEdge)
 {
 
@@ -1024,19 +1054,24 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 
 	double Xt[9];
 	double Xc[3];
-	// If segment element is quad then it is divided to 4 triangles:
+
+	// Number of TRiangles:
 	int ntr = 1;
 	if (nsn == 8)
 	{
+		// If the segment element is a quad then it is subdivided to 4 triangles (with a common vertex Xc in the centre of mass):
 		ntr = 4;
 	}
 
-	// Initialize the gap by minus float max value:
-	for (int i = 0; i < n * ngp; ++i)
+	// Initialize the gap by MINUS float max value (because negative is OPEN gap:
+	int numOfRows = n * ngp;
+	int colBegin = (nsd + 2) * numOfRows;
+	for (int row = 0; row < numOfRows; ++row)
 	{
-		GPs[(nsd + 2) * n * ngp + i] = -FLT_MAX;
+		GPs[colBegin + row] = -FLT_MAX;
 	}
 
+	// Loop over contact segments:
 	for (int e = 0; e < n; ++e)
 	{
 		int el = elementID[e] - 1;
@@ -1207,12 +1242,16 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 						const int Ic = i2 * N[0] * N[1] + i1 * N[0] + i0;
 						int v = head[Ic];
 
+						// Contact searching algorithm based on linked lists ( DOI: 10.1007/BF02487690, DOI: 10.1007/s00466-014-1058-5):
 						while (v != -1)
 						{
+							// v sequentially refers to the row in the GPs table of all Gauss points that lie in the "bucket" with the index Ic.
 
-							// Jump if Gausspoit segment is equal to master segment
+							// Read from table GPs the index of element and the local contact segment index:
 							int els = GPs[nsd * n * ngp + v] - 1;		// slave element
 							int sgs = GPs[(nsd + 1) * n * ngp + v] - 1; // slave segment
+
+							// Jump if Gausspoint segment is equal to master segment
 							if (el == els && sg == sgs)
 							{
 								v = next[v];
@@ -1220,7 +1259,8 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 							}
 
 							double d;
-							// Inside-outside algorithm:
+
+							// Inside-outside algorithm ( DOI: 10.1002/(SICI)1097-0207(19971015)40:19<3665::AID-NME234>3.0.CO;2-K ):
 							bool isInside = false;
 							if (nsd == 2)
 							{
@@ -1237,7 +1277,7 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 								t1_norm = sqrt(t1_norm);
 								d = d / t1_norm;
 
-								// Check if inside edge1:
+								// Check if inside edge_1:
 								if (d > 0.0 && d < t1_norm)
 								{
 									isInside = true;
@@ -1247,13 +1287,13 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 									for (int i = 0; i < nsd; ++i)
 									{
 										Xp[i] = Xm[i * nsn + 0] + d_aux * t1[i] / t1_norm;
-										sign += -(Xg[i] - Xp[i]) * normal[i];
+										sign -= (Xg[i] - Xp[i]) * normal[i]; // negative sign for the OPEN gap!
 										d += pow(Xg[i] - Xp[i], 2);
 									}
 									d = sqrt(d);
 									if (sign < 0)
-									{
-										d *= -1;
+									{			 // OPEN gap
+										d *= -1; // because d was distance (non negative number)
 									}
 								}
 							}
@@ -1308,7 +1348,11 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 
 							if (isInside)
 							{
-								// If distance is greater then the current closest distance:
+
+								// Perform a more accurate search if the current gap
+								// is smaller than the previously detected but not
+								// smaller than the width of the contact zone:
+
 								if (d > GPs[(nsd + 2) * n * ngp + v] && d < 25)
 								{
 
@@ -1316,7 +1360,7 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 									double r_len, r;
 									double s_len, s;
 									switch (nsn)
-									{
+									{ // Number of Segment Nodes
 									case 2:
 										// Tangent vectors parallel with element edges 1 and 2:
 										// Component: X     Y      Z
@@ -1397,43 +1441,69 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 											sfd8(Hm, dHm, r, s);
 										}
 
-										double b1, b2, A11, A22, A12, d_tmp;
+										double b1, b2, A11, A22, A12;
 										A11 = 0.0;
 										A22 = 0.0;
 										A12 = 0.0;
 										b1 = 0.0;
 										b2 = 0.0;
-										d_tmp = 0.0;
+										d = 0.0;
+
+										double Xp[3];
+										double dx_dr[3];
+										double dx_ds[3];
+										double normal[3];
 
 										for (int sdf = 0; sdf < nsd; ++sdf)
 										{
-											double x = 0.0;
-											double dx_dr = 0.0;
-											double dx_ds = 0.0;
-
+											Xp[sdf] = 0.0;
+											dx_dr[sdf] = 0.0;
+											dx_ds[sdf] = 0.0;
 											for (int k = 0; k < nsn; ++k)
 											{
-												x += Hm[k] * Xm[sdf * nsn + k];
-												dx_dr += dHm[k] * Xm[sdf * nsn + k];
+												Xp[sdf] += Hm[k] * Xm[sdf * nsn + k];
+												dx_dr[sdf] += dHm[k] * Xm[sdf * nsn + k];
 												if (npd == 2)
 												{
-													dx_ds += dHm[nsn + k] * Xm[sdf * nsn + k];
+													dx_ds[sdf] += dHm[nsn + k] * Xm[sdf * nsn + k];
 												}
 											}
+										}
 
-											b1 += dx_dr * (Xg[sdf] - x);
-											A11 += dx_dr * dx_dr;
+										if (nsd == 2)
+										{
+											normal[0] = dx_dr[1];
+											normal[1] = -dx_dr[0];
+											normal[2] = 0.0;
+											dx_dr[2] = 0.0;
+											dx_ds[2] = 0.0;
+										}
+										else if (nsd == 3)
+										{
+											normal[0] = dx_dr[1] * dx_ds[2] - dx_dr[2] * dx_ds[1];
+											normal[1] = dx_dr[2] * dx_ds[0] - dx_dr[0] * dx_ds[2];
+											normal[2] = dx_dr[0] * dx_ds[1] - dx_dr[1] * dx_ds[0];
+										}
+
+										const double normalLength = sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+										normal[0] /= normalLength;
+										normal[1] /= normalLength;
+										normal[2] /= normalLength;
+
+										for (int sdf = 0; sdf < nsd; ++sdf)
+										{
+											b1 += dx_dr[sdf] * (Xg[sdf] - Xp[sdf]);
+											A11 += dx_dr[sdf] * dx_dr[sdf];
 
 											if (npd == 2)
 											{
-												b2 += dx_ds * (Xg[sdf] - x);
-												A22 += dx_ds * dx_ds;
-												A12 += dx_dr * dx_ds;
+												b2 += dx_ds[sdf] * (Xg[sdf] - Xp[sdf]);
+												A22 += dx_ds[sdf] * dx_ds[sdf];
+												A12 += dx_dr[sdf] * dx_ds[sdf];
 											}
-											d_tmp += (Xg[sdf] - x) * (Xg[sdf] - x);
-										}
 
-										d = (d < 0) ? -sqrt(d_tmp) : sqrt(d_tmp);
+											d -= (Xg[sdf] - Xp[sdf]) * normal[sdf];
+										}
 
 										double recDetA;
 										double invA11;
@@ -1472,24 +1542,16 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 										printf("Fatal error: Local contact search do NOT converge.\n");
 									}
 
-									GPs[(nsd + 2) * n * ngp + v] = d; // store penetration
-
-									if (d > -1e-10)
+									if (d > GPs[(nsd + 2) * n * ngp + v] && d < 25.0)
 									{
+										GPs[(nsd + 2) * n * ngp + v] = d; // store gap (negative value means penetration)
 
-										// const bool isActive = (bool) GPs[(nsd + npd + 3)*n*ngp + v];
-
-										GPs[(nsd + npd + 3) * n * ngp + v] = 1.0;	 // set gausspoint to active state
+										if (d > -1e-10)
+										{											  // "positive" zero
+											GPs[(nsd + npd + 3) * n * ngp + v] = 1.0; // set gausspoint to active state
+										}
 										GPs[(nsd + npd + 4) * n * ngp + v] = el + 1; // set master element
 										GPs[(nsd + npd + 5) * n * ngp + v] = sg + 1; // set master segment
-
-										// Move Xi_m to Xi0_m:
-										/*
-										GPs[(nsd + 2*npd + 7)*n*ngp + v] = GPs[(nsd + 3)*n*ngp + v];
-										if (npd == 2) {
-										  GPs[(nsd + 2*npd + 8)*n*ngp + v] = GPs[(nsd + 4)*n*ngp + v];
-										}
-										*/
 
 										// Update Xi_m
 										GPs[(nsd + 3) * n * ngp + v] = r;
@@ -1497,41 +1559,31 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 										{
 											GPs[(nsd + 4) * n * ngp + v] = s;
 										}
-
-										/*
-										// If new contact, set Xi_m = Xi0_m:
-										if(isActive == false) {
-										  GPs[(nsd + 2*npd + 7)*n*ngp + v] = r;
-										  if (npd == 2) {
-										GPs[(nsd + 2*npd + 8)*n*ngp + v] = s;
-										  }
-										}
-										*/
 									}
-									else
-									{
-										GPs[(nsd + 2) * n * ngp + v] = -FLT_MAX; // init gap
-										for (int pdf = 0; pdf < npd; ++pdf)
-										{
-											GPs[(nsd + 3 + pdf) * n * ngp + v] = 0.0; // Xi_m
-										}
-										GPs[(nsd + npd + 3) * n * ngp + v] = 0; // init is NO active
-										GPs[(nsd + npd + 4) * n * ngp + v] = 0; // master element
-										GPs[(nsd + npd + 5) * n * ngp + v] = 0; // master segment
-										GPs[(nsd + npd + 6) * n * ngp + v] = 0; // is stick
 
-										for (int pdf = 0; pdf < nsd - 1; ++pdf)
-										{
-											GPs[(nsd + npd + 7 + pdf) * n * ngp + v] = 0.0; // tangent traction components
-										}
-										for (int pdf = 0; pdf < nsd - 1; ++pdf)
-										{
-											GPs[(nsd + 2 * npd + 7 + pdf) * n * ngp + v] = 0.0; // Xi0_m
-										}
+									/*
+									else {
+									  GPs[(nsd + 2)*n*ngp + v] = FLT_MAX;    // init gap
+									  for (int pdf = 0; pdf < npd; ++pdf) {
+										GPs[(nsd + 3 + pdf)*n*ngp + v] = 0.0; // Xi_m
+									  }
+									  GPs[(nsd + npd + 3)*n*ngp + v] = 0;       // init is NO active
+									  GPs[(nsd + npd + 4)*n*ngp + v] = 0;       // master element
+									  GPs[(nsd + npd + 5)*n*ngp + v] = 0;       // master segment
+									  GPs[(nsd + npd + 6)*n*ngp + v] = 0;       // is stick
+
+									  for (int pdf = 0; pdf < nsd-1; ++pdf) {
+										GPs[(nsd + npd + 7 + pdf)*n*ngp + v] = 0.0; // tangent traction components
+									  }
+									  for (int pdf = 0; pdf < nsd-1; ++pdf) {
+										GPs[(nsd + 2*npd + 7 + pdf)*n*ngp + v] = 0.0; // Xi0_m
+									  }
 									}
+									*/
+
 								} // if d is less then
-							}	  // if inside
 
+							} // if projection is inside the segment
 							v = next[v];
 						} // while
 					}	  // i0
