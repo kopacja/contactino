@@ -639,7 +639,7 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 				GPs[(nsd + npd + 3) * GPs_len + i + g] = 1;
 			}
 
-			double t_N = -epsN * GAPs[g];
+			double t_N = -epsN * GAPs[g]; // normal contact traction component is non-positive, i.e. compression
 			bool isStick = false;
 
 			// Check slip function:
@@ -703,8 +703,9 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 						C_Pm2[j * nsd + sdf] += dHm[nsn + j] * p_T[1];
 					}
 
-					Gc[segmentNodesIDs[j] * nsd + sdf] += t_N * hs * normal_m[sdf] * gw[g] * jacobian_s;
-					Gc_loc[(i + g) * (j * nsd + sdf) + i / ngp] += t_N * hs * normal_m[sdf] * gw[g] * jacobian_s;
+					// The negative master normal is used as the slave normal
+					Gc[segmentNodesIDs[j] * nsd + sdf] += t_N * hs * (-normal_m[sdf]) * gw[g] * jacobian_s;
+					Gc_loc[(i + g) * (j * nsd + sdf) + i / ngp] += t_N * hs * (-normal_m[sdf]) * gw[g] * jacobian_s;
 
 					/*
 					  for (int pdf = 0; pdf < npd; ++pdf) {
