@@ -234,6 +234,7 @@ void sfd2(double *H, double *dH, double r)
 */
 void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc, double *vals, double *rows, double *cols, int *len, double *GPs, int *ISN, int *IEN, double *X, double *U, double *H, double *dH, double *gw, double *activeGPsOld, int neq, int nsd, int npd, int ngp, int nes, int nsn, int nen, int GPs_len, double epsN, double epsT, double mu, bool keyContactDetection, bool keyAssembleKc, bool isAxisymmetric)
 {
+
 	int col;
 	int *segmentNodesIDs = new int[nsn];
 	int *segmentNodesIDm = new int[nsn];
@@ -640,6 +641,7 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 			}
 
 			double t_N = -epsN * GAPs[g]; // normal contact traction component is non-positive, i.e. compression
+
 			bool isStick = false;
 
 			// Check slip function:
@@ -704,8 +706,12 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 					}
 
 					// The negative master normal is used as the slave normal
-					Gc[segmentNodesIDs[j] * nsd + sdf] += t_N * hs * (-normal_m[sdf]) * gw[g] * jacobian_s;
-					Gc_loc[(i + g) * (j * nsd + sdf) + i / ngp] += t_N * hs * (-normal_m[sdf]) * gw[g] * jacobian_s;
+					Gc[segmentNodesIDs[j] * nsd + sdf] -= t_N * hs * (-normal_m[sdf]) * gw[g] * jacobian_s;
+					Gc_loc[(i + g) * (j * nsd + sdf) + i / ngp] -= t_N * hs * (-normal_m[sdf]) * gw[g] * jacobian_s;
+
+					//////////// For MASTER-SLAVE t_N * hm term is needed (loop over GPs tabel goes only over SLAVE GPs)
+					// Gc[segmentNodesIDm[j] * nsd + sdf]    -= t_N * hm * (normal_m[sdf]) * gw[g] * jacobian_s;
+					//  MUSI SE UPRAVIT: Gc_loc[ (i+g)*(j*nsd + sdf) + i/ngp]  = t_N * hm * (-normal_m[sdf]) * gw[g] * jacobian_s;
 
 					/*
 					  for (int pdf = 0; pdf < npd; ++pdf) {
@@ -764,11 +770,22 @@ void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc,
 						{
 							cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
 							rows[*len] = segmentNodesIDs[knode] * nsd + kdof + 1;
-							vals[*len] = +t_N * invmm[0] * (C_Ts1[k] * C_Nm1[j]) * gw[g] * jacobian_s;
+							vals[*len] = -t_N * invmm[0] * (C_Ts1[k] * C_Nm1[j]) * gw[g] * jacobian_s;
 							(*len)++;
 							if (*len >= len_guess)
 								printf("Error, len is too small: len = %i.\n", len_guess);
 						}
+						//////////// For MASTER-SLAVE C_Nm*C_Nm term is needed (loop over GPs tabel goes only over SLAVE GPs)
+
+						/*
+						if(fabs(C_Nm[k] * C_Nm[j]) > 1e-50) {
+						  cols[*len] = segmentNodesIDm[jnode] * nsd + jdof + 1;
+						  rows[*len] = segmentNodesIDm[knode] * nsd + kdof + 1;
+						  vals[*len] = epsN * (C_Nm[k] * C_Nm[j]) * gw[g] * jacobian_s;
+						  (*len)++;
+						  if (*len >= len_guess) printf("Error, len is too small: len = %i.\n", len_guess);
+						}
+						*/
 
 						if (isStick)
 						{	////////////////// stick ///////////////////
@@ -1491,6 +1508,7 @@ void evaluateContactConstraints(double *GPs, int *ISN, int *IEN, int *N, double 
 										normal[1] /= normalLength;
 										normal[2] /= normalLength;
 
+										d = 0.0;
 										for (int sdf = 0; sdf < nsd; ++sdf)
 										{
 											b1 += dx_dr[sdf] * (Xg[sdf] - Xp[sdf]);
