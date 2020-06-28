@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.10] - 2020-06-28
+
+### Added
+
+- nsg added as a parameter to the assembleContactResidualAndStiffness function
+- Loop not over all Gausspoint but only first nsg (Number of Slave Gausspoints) ones to get clasical master-slave formulation.
+
+### Fixed
+
+### Changed
+
+- (GAPs[g] < -1e-10) changed to (GAPs[g] < 0.0)
+
 ## [0.0.9] - 2020-06-10
 
 ### Changed
@@ -111,7 +124,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only sfd6() i.e. quadratic triangle contact element in 3D
 - All arrays are 1D
 
-[unreleased]: https://github.com/kopacja/contactino/compare/v0.0.9...HEAD
+[unreleased]: https://github.com/kopacja/contactino/compare/v0.0.10...HEAD
+[0.0.10]: https://github.com/kopacja/contactino/releases/tag/v0.0.10
 [0.0.9]: https://github.com/kopacja/contactino/releases/tag/v0.0.9
 [0.0.8]: https://github.com/kopacja/contactino/releases/tag/v0.0.8
 [0.0.7]: https://github.com/kopacja/contactino/releases/tag/v0.0.7

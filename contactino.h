@@ -19,7 +19,7 @@ extern "C"
 
 	void getAABB(double *AABBmin, double *AABBmax, int nsd, int nnod, double *X, double longestEdge, int *IEN, int *ISN, int *elementID, int *segmentID, int n, int nsn, int nes, int nen, int neq);
 
-	void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc, double *vals, double *rows, double *cols, int *len, double *GPs, int *ISN, int *IEN, double *X, double *U, double *H, double *dH, double *gw, double *activeGPsOld, int neq, int nsd, int npd, int ngp, int nes, int nsn, int nen, int GPs_len, double epsN, double epsT, double mu, bool keyContactDetection, bool keyAssembleKc, bool isAxisymmetric);
+	void assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc, double *vals, double *rows, double *cols, int *len, double *GPs, int *ISN, int *IEN, double *X, double *U, double *H, double *dH, double *gw, double *activeGPsOld, int neq, int nsd, int npd, int ngp, int nes, int nsn, int nen, int GPs_len, double epsN, double epsT, double mu, bool keyContactDetection, bool keyAssembleKc, bool isAxisymmetric, int nsg);
 
 	void getLongestEdgeAndGPs(double *longestEdge, double *GPs, int n, int nsd, int npd, int ngp, int neq, int nsn, int nes, int nen, int *elementID, int *segmentID, int *ISN, int *IEN, double *H, double *X);
 
@@ -33,7 +33,7 @@ void __declspec(dllexport) sfd6(double *H, double *dH, double r, double s);
 void __declspec(dllexport) sfd8(double *H, double *dH, double r, double s);
 void __declspec(dllexport) getAABB(double *AABBmin, double *AABBmax, int nsd, int nnod, double *X, double longestEdge, int *IEN, int *ISN, int *elementID, int *segmentID, int n, int nsn, int nes, int nen, int neq);
 
-void __declspec(dllexport) assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc, double *vals, double *rows, double *cols, int *len, double *GPs, int *ISN, int *IEN, double *X, double *U, double *H, double *dH, double *gw, double *activeGPsOld, int neq, int nsd, int npd, int ngp, int nes, int nsn, int nen, int GPs_len, double epsN, double epsT, double mu, bool keyContactDetection, bool keyAssembleKc, bool isAxisymmetric);
+void __declspec(dllexport) assembleContactResidualAndStiffness(double *Gc_loc, double *Gc, double *Kc, double *vals, double *rows, double *cols, int *len, double *GPs, int *ISN, int *IEN, double *X, double *U, double *H, double *dH, double *gw, double *activeGPsOld, int neq, int nsd, int npd, int ngp, int nes, int nsn, int nen, int GPs_len, double epsN, double epsT, double mu, bool keyContactDetection, bool keyAssembleKc, bool isAxisymmetric, int nsg);
 
 void __declspec(dllexport) getLongestEdgeAndGPs(double *longestEdge, double *GPs, int n, int nsd, int npd, int ngp, int neq, int nsn, int nes, int nen, int *elementID, int *segmentID, int *ISN, int *IEN, double *H, double *X);
 
